@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go: ["1.21.x", "stable"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+      - name: gofmt
+        if: matrix.os == 'ubuntu-latest' && matrix.go == 'stable'
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - run: go vet ./...
+      - name: test
+        if: matrix.os != 'ubuntu-latest'
+        run: go test -count=1 ./...
+      - name: test (race)
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -race -count=1 ./...
+      - name: fuzz
+        if: matrix.os == 'ubuntu-latest' && matrix.go == 'stable'
+        run: go test -run '^$' -fuzz FuzzRead -fuzztime 60s .
